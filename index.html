@@ -1,0 +1,2321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>潘依婷的相册</title>
+    <!-- 引入外部资源 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+    
+    <!-- Tailwind 配置 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#e94560',
+                        secondary: '#ffd166',
+                        accent: '#06d6a0',
+                        dark: '#1a1a2e',
+                        light: '#f7f7f9'
+                    },
+                    fontFamily: {
+                        inter: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <!-- 自定义工具类 -->
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .photo-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 0.75rem;
+            }
+            @screen md {
+                .photo-grid {
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 1rem;
+                }
+            }
+            @screen lg {
+                .photo-grid {
+                    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+                    gap: 1.25rem;
+                }
+            }
+            .sidebar-active {
+                @apply bg-primary/10 text-primary border-l-4 border-primary;
+            }
+            .scrollbar-hide {
+                -ms-overflow-style: none;
+                scrollbar-width: none;
+            }
+            .scrollbar-hide::-webkit-scrollbar {
+                display: none;
+            }
+            .fade-in {
+                animation: fadeIn 0.3s ease-in-out;
+            }
+            .scale-in {
+                animation: scaleIn 0.2s ease-out;
+            }
+            .pulse-light {
+                animation: pulseLight 2s infinite;
+            }
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes scaleIn {
+                from { transform: scale(0.95); opacity: 0; }
+                to { transform: scale(1); opacity: 1; }
+            }
+            @keyframes pulseLight {
+                0%, 100% { opacity: 1; }
+                50% { opacity: 0.7; }
+            }
+        }
+    </style>
+</head>
+
+<body class="font-inter bg-light text-dark antialiased min-h-screen flex flex-col">
+    <!-- 顶部导航栏 -->
+    <header class="sticky top-0 z-40 bg-white/90 backdrop-blur-sm border-b border-gray-200 transition-all duration-300">
+        <div class="container mx-auto px-4">
+            <div class="flex items-center justify-between h-16">
+                <!-- 品牌标识 -->
+                <div class="flex items-center space-x-2">
+                    <button id="sidebar-toggle" class="p-2 md:hidden rounded-md hover:bg-gray-100 transition-colors">
+                        <i class="fa fa-bars text-gray-600"></i>
+                    </button>
+                    <div class="flex items-center">
+                        <i class="fa fa-camera text-primary text-2xl"></i>
+                        <span class="ml-2 text-xl font-bold">潘依婷的相册</span>
+                    </div>
+                </div>
+                
+                <!-- 搜索栏 -->
+                <div class="hidden md:flex relative flex-1 max-w-xl mx-6">
+                    <input type="text" placeholder="搜索照片、相册或标签..." 
+                           class="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 focus:bg-white border border-transparent focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all">
+                    <i class="fa fa-search absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                </div>
+                
+                <!-- 右侧操作区 -->
+                <div class="flex items-center space-x-1 md:space-x-3">
+                    <!-- 上传按钮 -->
+                    <label for="upload-input" class="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 relative overflow-hidden group">
+                        <i class="fa fa-upload text-lg"></i>
+                        <span class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-dark text-white text-xs py-1 px-2 rounded whitespace-nowrap group-hover:-bottom-6 transition-all duration-300">上传照片</span>
+                        <input type="file" id="upload-input" accept="image/*" multiple class="absolute inset-0 opacity-0 cursor-pointer">
+                    </label>
+                    
+                    <!-- 创建相册按钮 -->
+                    <button id="create-album-btn" class="p-2 rounded-full hover:bg-gray-100 transition-colors text-gray-600 relative group">
+                        <i class="fa fa-folder-plus text-lg"></i>
+                        <span class="absolute -bottom-8 left-1/2 transform -translate-x-1/2 bg-dark text-white text-xs py-1 px-2 rounded whitespace-nowrap group-hover:-bottom-6 transition-all duration-300">创建相册</span>
+                    </button>
+                    
+                    <!-- 用户头像 -->
+                    <div class="relative group">
+                        <button class="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-medium">
+                            婷
+                        </button>
+                        <!-- 用户菜单 -->
+                        <div class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 hidden group-hover:block fade-in">
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100">个人资料</a>
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100">设置</a>
+                            <a href="#" class="block px-4 py-2 text-sm hover:bg-gray-100 text-red-500">退出</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- 主内容区 -->
+    <div class="flex flex-1 overflow-hidden">
+        <!-- 侧边栏 -->
+        <aside id="sidebar" class="w-64 bg-white border-r border-gray-200 flex-shrink-0 hidden md:block transition-all duration-300 overflow-y-auto scrollbar-hide h-[calc(100vh-4rem)] sticky top-16">
+            <nav class="py-4">
+                <div class="px-4 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    导航
+                </div>
+                <a href="#" class="sidebar-active flex items-center px-4 py-3 text-sm font-medium transition-colors">
+                    <i class="fa fa-th-large w-5 text-center mr-3"></i>
+                    所有照片
+                </a>
+                
+                <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    相册
+                </div>
+                <div id="albums-list">
+                    <!-- 相册列表将通过JS动态生成 -->
+                </div>
+                <button id="add-album-btn" class="flex items-center px-4 py-3 text-sm font-medium text-primary hover:bg-primary/10 transition-colors w-full text-left">
+                    <i class="fa fa-plus w-5 text-center mr-3"></i>
+                    创建相册
+                </button>
+                
+                <div class="px-4 mt-6 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                    标签
+                </div>
+                <div id="tags-list" class="max-h-32 overflow-y-auto scrollbar-hide">
+                    <!-- 标签列表将通过JS动态生成 -->
+                </div>
+            </nav>
+        </aside>
+
+        <!-- 主内容 -->
+        <main class="flex-1 overflow-y-auto bg-gray-50 p-4 md:p-6">
+            <!-- 当前相册标题 -->
+            <div id="current-album-header" class="mb-6 hidden">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center">
+                        <button id="back-to-all" class="mr-3 text-gray-600 hover:text-primary">
+                            <i class="fa fa-arrow-left"></i>
+                        </button>
+                        <h1 id="current-album-title" class="text-2xl font-bold"></h1>
+                    </div>
+                    <div class="flex space-x-2">
+                        <button id="edit-album-btn" class="px-3 py-1.5 border border-gray-300 rounded-md text-sm hover:bg-gray-50 transition-colors">
+                            <i class="fa fa-pencil mr-1"></i> 编辑
+                        </button>
+                        <button id="delete-album-btn" class="px-3 py-1.5 border border-red-200 bg-red-50 rounded-md text-sm text-red-600 hover:bg-red-100 transition-colors">
+                            <i class="fa fa-trash mr-1"></i> 删除
+                        </button>
+                    </div>
+                </div>
+                <p id="current-album-description" class="mt-1 text-gray-600"></p>
+                <div class="mt-3 flex items-center text-sm text-gray-500">
+                    <span id="current-album-count" class="mr-4"></span>
+                    <span id="current-album-date"></span>
+                </div>
+            </div>
+            
+            <!-- 移动端搜索栏 -->
+            <div class="md:hidden relative mb-4">
+                <input type="text" placeholder="搜索照片、相册或标签..." 
+                       class="w-full pl-10 pr-4 py-2 rounded-full bg-gray-100 focus:bg-white border border-transparent focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary transition-all">
+                <i class="fa fa-search absolute left-3.5 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+            </div>
+            
+            <!-- 工具栏 -->
+            <div class="flex flex-wrap items-center justify-between mb-6 gap-2">
+                <div class="flex items-center space-x-2">
+                    <h1 class="text-2xl font-bold">所有照片</h1>
+                    <span id="photos-count" class="text-gray-500 text-sm bg-gray-100 px-2 py-0.5 rounded-full">0张照片</span>
+                </div>
+                
+                <div class="flex items-center space-x-2">
+                    <!-- 视图切换 -->
+                    <div class="hidden md:flex border rounded-md overflow-hidden">
+                        <button id="grid-view-btn" class="px-3 py-1.5 bg-primary text-white text-sm">
+                            <i class="fa fa-th-large"></i>
+                        </button>
+                        <button id="list-view-btn" class="px-3 py-1.5 bg-white hover:text-primary text-sm">
+                            <i class="fa fa-list"></i>
+                        </button>
+                    </div>
+                    
+                    <!-- 排序选项 -->
+                    <select id="sort-select" class="bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+                        <option value="newest">最新添加</option>
+                        <option value="oldest">最早添加</option>
+                        <option value="name-asc">名称 (A-Z)</option>
+                        <option value="name-desc">名称 (Z-A)</option>
+                    </select>
+                    
+                    <!-- 批量操作按钮 -->
+                    <button id="batch-actions-btn" class="hidden bg-white border border-gray-300 rounded-md px-3 py-1.5 text-sm hover:bg-gray-50 transition-colors" disabled>
+                        <i class="fa fa-cog mr-1"></i> 批量操作
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 上传区域 -->
+            <div id="drop-area" class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center mb-8 hover:border-primary/50 transition-colors bg-white/50">
+                <i class="fa fa-cloud-upload text-4xl text-gray-400 mb-4"></i>
+                <h3 class="text-lg font-medium mb-2">拖放照片到此处上传</h3>
+                <p class="text-gray-500 text-sm mb-4">支持 JPG, PNG, GIF, HEIC 格式，单张不超过 50MB</p>
+                <label for="drop-area-upload" class="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors cursor-pointer">
+                    <i class="fa fa-plus mr-2"></i> 选择照片
+                    <input type="file" id="drop-area-upload" accept="image/*" multiple class="hidden">
+                </label>
+            </div>
+            
+            <!-- 照片内容区 -->
+            <div id="photos-content">
+                <!-- 时间分组将通过JS动态生成 -->
+                <div id="empty-state" class="text-center py-16 bg-white rounded-xl">
+                    <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-100 mb-4">
+                        <i class="fa fa-picture-o text-2xl text-gray-400"></i>
+                    </div>
+                    <h3 class="text-lg font-medium mb-2">暂无照片</h3>
+                    <p class="text-gray-500 text-sm max-w-md mx-auto mb-6">上传照片到您的相册，它们将自动按时间分类并安全存储</p>
+                    <label for="empty-state-upload" class="inline-flex items-center px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors cursor-pointer">
+                        <i class="fa fa-upload mr-2"></i> 上传第一张照片
+                        <input type="file" id="empty-state-upload" accept="image/*" multiple class="hidden">
+                    </label>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- 上传进度模态框 -->
+    <div id="upload-progress-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">正在上传</h3>
+                <button id="cancel-upload-btn" class="text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div id="upload-overall-progress" class="mb-4">
+                <div class="flex justify-between text-sm mb-1">
+                    <span id="upload-overall-text">准备中...</span>
+                    <span id="upload-overall-percent">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="upload-overall-bar" class="bg-primary h-2.5 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div id="upload-file-progress" class="mb-4 hidden">
+                <div class="flex justify-between text-sm mb-1">
+                    <span id="upload-file-name">文件名称</span>
+                    <span id="upload-file-percent">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="upload-file-bar" class="bg-secondary h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <div id="upload-status" class="text-sm text-gray-500 italic text-center hidden">
+                正在处理照片...
+            </div>
+            
+            <!-- 断点续传控制 -->
+            <div id="resume-controls" class="mt-4 hidden">
+                <button id="pause-upload-btn" class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                    <i class="fa fa-pause mr-1"></i> 暂停上传
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 照片预览模态框 -->
+    <div id="photo-preview-modal" class="fixed inset-0 bg-black/95 z-50 hidden fade-in">
+        <div class="absolute top-4 left-4 z-10">
+            <button id="close-preview-btn" class="text-white hover:text-gray-300 p-2 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-times text-xl"></i>
+            </button>
+        </div>
+        
+        <div class="absolute top-4 right-4 z-10 flex space-x-2">
+            <button id="download-photo-btn" class="text-white hover:text-gray-300 p-2 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-download text-xl"></i>
+            </button>
+            <button id="share-photo-btn" class="text-white hover:text-gray-300 p-2 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-share-alt text-xl"></i>
+            </button>
+            <button id="delete-photo-btn" class="text-white hover:text-gray-300 p-2 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-trash text-xl"></i>
+            </button>
+        </div>
+        
+        <div class="flex items-center justify-center h-full p-4">
+            <button id="prev-photo-btn" class="absolute left-4 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white p-4 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-chevron-left text-3xl"></i>
+            </button>
+            
+            <div class="relative max-w-5xl max-h-[90vh]">
+                <!-- 对于GIF使用img标签保持动画，其他图片也使用img标签 -->
+                <img id="preview-image" src="" alt="照片预览" class="max-w-full max-h-[90vh] mx-auto object-contain">
+                <div id="preview-loading" class="absolute inset-0 flex items-center justify-center hidden">
+                    <div class="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin"></div>
+                </div>
+            </div>
+            
+            <button id="next-photo-btn" class="absolute right-4 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white p-4 rounded-full hover:bg-black/30 transition-colors">
+                <i class="fa fa-chevron-right text-3xl"></i>
+            </button>
+        </div>
+        
+        <div class="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black/50 text-white px-4 py-2 rounded-lg backdrop-blur-sm text-sm">
+            <span id="preview-info">照片信息</span>
+        </div>
+    </div>
+
+    <!-- 创建/编辑相册模态框 -->
+    <div id="album-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 id="album-modal-title" class="text-lg font-semibold">创建新相册</h3>
+                <button class="close-modal text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <form id="album-form">
+                <input type="hidden" id="album-id">
+                <div class="mb-4">
+                    <label for="album-name" class="block text-sm font-medium text-gray-700 mb-1">相册名称</label>
+                    <input type="text" id="album-name" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary" required>
+                    <p id="album-name-error" class="mt-1 text-xs text-red-500 hidden">请输入相册名称</p>
+                </div>
+                
+                <div class="mb-6">
+                    <label for="album-description" class="block text-sm font-medium text-gray-700 mb-1">描述（可选）</label>
+                    <textarea id="album-description" rows="3" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"></textarea>
+                </div>
+                
+                <div class="flex justify-end space-x-3">
+                    <button type="button" class="close-modal px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                        取消
+                    </button>
+                    <button type="submit" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
+                        <span id="album-modal-action">创建相册</span>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 确认删除模态框 -->
+    <div id="confirm-delete-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 scale-in">
+            <div class="text-center mb-4">
+                <div class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-4">
+                    <i class="fa fa-exclamation-triangle text-2xl text-red-500"></i>
+                </div>
+                <h3 id="confirm-delete-title" class="text-lg font-semibold mb-2">确认删除</h3>
+                <p id="confirm-delete-message" class="text-gray-600">您确定要删除吗？此操作无法撤销。</p>
+            </div>
+            
+            <div class="flex justify-center space-x-3">
+                <button id="cancel-delete-btn" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                    取消
+                </button>
+                <button id="confirm-delete-btn" class="px-4 py-2 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600 transition-colors">
+                    确认删除
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 分享照片模态框 -->
+    <div id="share-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">分享照片</h3>
+                <button class="close-modal text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-1">分享链接</label>
+                <div class="flex">
+                    <input type="text" id="share-link" class="flex-1 px-3 py-2 border border-gray-300 rounded-l-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary bg-gray-50" readonly>
+                    <button id="copy-share-link" class="px-3 py-2 bg-gray-100 border border-l-0 border-gray-300 rounded-r-md text-gray-600 hover:bg-gray-200 transition-colors">
+                        <i class="fa fa-copy"></i>
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-1">有效期</label>
+                <select id="share-expiry" class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary">
+                    <option value="24h">24小时</option>
+                    <option value="7d">7天</option>
+                    <option value="30d">30天</option>
+                    <option value="never">永久有效</option>
+                </select>
+            </div>
+            
+            <div class="flex justify-end">
+                <button type="button" class="close-modal px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
+                    关闭
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 批量操作模态框 -->
+    <div id="batch-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full-full max-w-md p-6 scale-in">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">批量操作</h3>
+                <button class="close-modal text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="mb-2">
+                <p class="text-sm text-gray-500 mb-4"><span id="batch-count">0</span> 张照片已选中</p>
+                
+                <div class="space-y-2">
+                    <button id="batch-add-album" class="w-full flex items-center justify-start px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                        <i class="fa fa-folder-o mr-3 text-gray-500"></i>
+                        添加到相册
+                    </button>
+                    <button id="batch-add-tag" class="w-full flex items-center justify-start px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                        <i class="fa fa-tag mr-3 text-gray-500"></i>
+                        添加标签
+                    </button>
+                    <button id="batch-download" class="w-full flex items-center justify-start px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                        <i class="fa fa-download mr-3 text-gray-500"></i>
+                        下载所选照片
+                    </button>
+                    <button id="batch-delete" class="w-full flex items-center justify-start px-4 py-2 border border-red-200 bg-red-50 rounded-md text-sm font-medium text-red-600 hover:bg-red-100 transition-colors">
+                        <i class="fa fa-trash mr-3"></i>
+                        删除所选照片
+                    </button>
+                </div>
+            </div>
+            
+            <div class="mt-6 pt-4 border-t border-gray-100">
+                <button id="batch-cancel" class="w-full px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                    取消选择
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 添加到相册模态框 -->
+    <div id="add-to-album-modal" class="fixed inset-0 bg-black/50 z-50 hidden items-center justify-center p-4">
+        <div class="bg-white rounded-xl shadow-xl w-full max-w-md p-6 scale-in max-h-[90vh] flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-lg font-semibold">添加到相册</h3>
+                <button class="close-modal text-gray-500 hover:text-gray-700 transition-colors">
+                    <i class="fa fa-times"></i>
+                </button>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto">
+                <div id="add-to-album-list" class="space-y-2">
+                    <!-- 相册列表将通过JS动态生成 -->
+                </div>
+            </div>
+            
+            <div class="mt-4 pt-4 border-t border-gray-100 flex justify-between">
+                <button id="create-new-album-btn" class="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50 transition-colors">
+                    <i class="fa fa-plus mr-1"></i> 新建相册
+                </button>
+                <button id="confirm-add-to-album" class="px-4 py-2 bg-primary text-white rounded-md text-sm font-medium hover:bg-primary/90 transition-colors">
+                    确认添加
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 通知提示 -->
+    <div id="notification" class="fixed bottom-4 right-4 max-w-sm bg-white rounded-lg shadow-lg p-4 transform translate-y-20 opacity-0 transition-all duration-300 z-50 hidden">
+        <div class="flex">
+            <div id="notification-icon" class="flex-shrink-0 mr-3">
+                <i class="fa fa-check-circle text-green-500 text-xl"></i>
+            </div>
+            <div>
+                <h3 id="notification-title" class="text-sm font-medium"></h3>
+                <div id="notification-message" class="mt-1 text-sm text-gray-500"></div>
+            </div>
+            <button id="close-notification" class="ml-auto flex-shrink-0 text-gray-400 hover:text-gray-500">
+                <i class="fa fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // 断点续传管理器
+        const resumeManager = {
+            // 保存上传进度
+            saveProgress(fileId, progress) {
+                try {
+                    const progressData = JSON.parse(localStorage.getItem('uploadProgress')) || {};
+                    progressData[fileId] = {
+                        progress,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem('uploadProgress', JSON.stringify(progressData));
+                } catch (error) {
+                    console.error('保存上传进度失败:', error);
+                }
+            },
+            
+            // 获取上传进度
+            getProgress(fileId) {
+                try {
+                    const progressData = JSON.parse(localStorage.getItem('uploadProgress')) || {};
+                    return progressData[fileId] || { progress: 0 };
+                } catch (error) {
+                    console.error('获取上传进度失败:', error);
+                    return { progress: 0 };
+                }
+            },
+            
+            // 清除上传进度
+            clearProgress(fileId) {
+                try {
+                    const progressData = JSON.parse(localStorage.getItem('uploadProgress')) || {};
+                    delete progressData[fileId];
+                    localStorage.setItem('uploadProgress', JSON.stringify(progressData));
+                } catch (error) {
+                    console.error('清除上传进度失败:', error);
+                }
+            },
+            
+            // 生成文件唯一ID
+            generateFileId(file) {
+                return `${file.name}-${file.size}-${file.lastModified}`;
+            }
+        };
+
+        // 数据模型
+        const photoManager = {
+            photos: JSON.parse(localStorage.getItem('yitingAlbumPhotos')) || [],
+            albums: JSON.parse(localStorage.getItem('yitingAlbumAlbums')) || [],
+            tags: JSON.parse(localStorage.getItem('yitingAlbumTags')) || [],
+            selectedPhotos: [],
+            currentPreviewIndex: -1,
+            currentAlbumId: null,
+            
+            // 保存数据到本地存储
+            saveData() {
+                try {
+                    localStorage.setItem('yitingAlbumPhotos', JSON.stringify(this.photos));
+                    localStorage.setItem('yitingAlbumAlbums', JSON.stringify(this.albums));
+                    localStorage.setItem('yitingAlbumTags', JSON.stringify(this.tags));
+                    return true;
+                } catch (error) {
+                    console.error('保存数据失败:', error);
+                    showNotification('保存失败', '无法保存数据到本地存储', 'error');
+                    return false;
+                }
+            },
+            
+            // 添加照片
+            addPhotos(photos) {
+                this.photos.push(...photos);
+                this.saveData();
+                this.updateCounts();
+                
+                // 如果当前在查看某个相册，将新照片添加到该相册
+                if (this.currentAlbumId) {
+                    const album = this.getAlbumById(this.currentAlbumId);
+                    if (album) {
+                        photos.forEach(photo => {
+                            this.addPhotoToAlbum(photo.id, this.currentAlbumId);
+                        });
+                    }
+                }
+            },
+            
+            // 删除照片
+            deletePhotos(photoIds) {
+                // 对于GIF，释放object URL
+                photoIds.forEach(photoId => {
+                    const photo = this.getPhotoById(photoId);
+                    if (photo && photo.isGif && photo.url.startsWith('blob:')) {
+                        URL.revokeObjectURL(photo.url);
+                    }
+                });
+                
+                // 从相册中移除
+                this.albums.forEach(album => {
+                    album.photoIds = album.photoIds.filter(id => !photoIds.includes(id));
+                });
+                
+                // 从标签中移除
+                this.tags.forEach(tag => {
+                    tag.photoIds = tag.photoIds.filter(id => !photoIds.includes(id));
+                });
+                
+                // 从照片列表中删除
+                this.photos = this.photos.filter(photo => !photoIds.includes(photo.id));
+                this.saveData();
+                this.updateCounts();
+            },
+            
+            // 创建相册
+            createAlbum(name, description) {
+                const album = {
+                    id: Date.now(),
+                    name,
+                    description: description || '',
+                    photoIds: [],
+                    createdAt: new Date().toISOString()
+                };
+                this.albums.push(album);
+                if (this.saveData()) {
+                    return album;
+                }
+                return null;
+            },
+            
+            // 更新相册
+            updateAlbum(albumId, name, description) {
+                const album = this.getAlbumById(albumId);
+                if (album) {
+                    album.name = name;
+                    album.description = description;
+                    this.saveData();
+                    return true;
+                }
+                return false;
+            },
+            
+            // 删除相册
+            deleteAlbum(albumId) {
+                // 查找相册
+                const albumIndex = this.albums.findIndex(a => a.id === albumId);
+                if (albumIndex !== -1) {
+                    this.albums.splice(albumIndex, 1);
+                    this.saveData();
+                    return true;
+                }
+                return false;
+            },
+            
+            // 获取相册
+            getAlbumById(albumId) {
+                return this.albums.find(a => a.id === albumId);
+            },
+            
+            // 获取照片
+            getPhotoById(photoId) {
+                return this.photos.find(p => p.id === photoId);
+            },
+            
+            // 添加标签
+            addTag(name) {
+                if (!this.tags.some(tag => tag.name.toLowerCase() === name.toLowerCase())) {
+                    const tag = {
+                        id: Date.now(),
+                        name,
+                        photoIds: []
+                    };
+                    this.tags.push(tag);
+                    this.saveData();
+                    return tag;
+                }
+                return this.tags.find(tag => tag.name.toLowerCase() === name.toLowerCase());
+            },
+            
+            // 给照片添加标签
+            tagPhoto(photoId, tagId) {
+                const photo = this.getPhotoById(photoId);
+                const tag = this.tags.find(t => t.id === tagId);
+                
+                if (photo && tag) {
+                    if (!photo.tags.includes(tagId)) {
+                        photo.tags.push(tagId);
+                    }
+                    if (!tag.photoIds.includes(photoId)) {
+                        tag.photoIds.push(photoId);
+                    }
+                    this.saveData();
+                }
+            },
+            
+            // 将照片添加到相册
+            addPhotoToAlbum(photoId, albumId) {
+                const album = this.getAlbumById(albumId);
+                if (album && !album.photoIds.includes(photoId)) {
+                    album.photoIds.push(photoId);
+                    this.saveData();
+                    return true;
+                }
+                return false;
+            },
+            
+            // 从相册移除照片
+            removePhotoFromAlbum(photoId, albumId) {
+                const album = this.getAlbumById(albumId);
+                if (album) {
+                    const index = album.photoIds.indexOf(photoId);
+                    if (index !== -1) {
+                        album.photoIds.splice(index, 1);
+                        this.saveData();
+                        return true;
+                    }
+                }
+                return false;
+            },
+            
+            // 获取相册中的照片
+            getAlbumPhotos(albumId) {
+                const album = this.getAlbumById(albumId);
+                if (!album) return [];
+                
+                return album.photoIds
+                    .map(photoId => this.getPhotoById(photoId))
+                    .filter(photo => photo !== undefined);
+            },
+            
+            // 生成分享链接
+            generateShareLink(photoId, expiry) {
+                // 实际应用中应通过后端生成带签名的临时链接
+                const base64Id = btoa(photoId.toString());
+                const expiryTimestamp = this.calculateExpiryTimestamp(expiry);
+                return `https://yiting-album.example/share/${base64Id}?expires=${expiryTimestamp}`;
+            },
+            
+            // 计算过期时间戳
+            calculateExpiryTimestamp(expiry) {
+                const now = new Date();
+                switch(expiry) {
+                    case '24h':
+                        now.setHours(now.getHours() + 24);
+                        break;
+                    case '7d':
+                        now.setDate(now.getDate() + 7);
+                        break;
+                    case '30d':
+                        now.setDate(now.getDate() + 30);
+                        break;
+                    case 'never':
+                        return 'never';
+                }
+                return Math.floor(now.getTime() / 1000);
+            },
+            
+            // 更新计数显示
+            updateCounts() {
+                let displayCount = this.photos.length;
+                
+                // 如果在查看特定相册，显示该相册的照片数量
+                if (this.currentAlbumId) {
+                    const album = this.getAlbumById(this.currentAlbumId);
+                    if (album) {
+                        displayCount = album.photoIds.length;
+                    }
+                }
+                
+                document.getElementById('photos-count').textContent = `${displayCount}张照片`;
+            },
+            
+            // 按时间分组照片
+            groupPhotosByTime() {
+                const groups = {};
+                let photosToGroup = this.photos;
+                
+                // 如果在查看特定相册，只分组该相册的照片
+                if (this.currentAlbumId) {
+                    photosToGroup = this.getAlbumPhotos(this.currentAlbumId);
+                }
+                
+                // 先按年份分组，再按月份
+                photosToGroup.forEach(photo => {
+                    const date = new Date(photo.date);
+                    const year = date.getFullYear();
+                    const month = date.getMonth() + 1; // 月份从0开始，+1转为1-12
+                    const monthName = this.getMonthName(month);
+                    
+                    const yearKey = year.toString();
+                    const monthKey = `${year}-${month}`;
+                    
+                    if (!groups[yearKey]) {
+                        groups[yearKey] = {
+                            year,
+                            months: {}
+                        };
+                    }
+                    
+                    if (!groups[yearKey].months[monthKey]) {
+                        groups[yearKey].months[monthKey] = {
+                            month,
+                            monthName,
+                            photos: []
+                        };
+                    }
+                    
+                    groups[yearKey].months[monthKey].photos.push(photo);
+                });
+                
+                // 按时间排序
+                const sortedYears = Object.values(groups).sort((a, b) => b.year - a.year);
+                
+                sortedYears.forEach(yearGroup => {
+                    yearGroup.months = Object.values(yearGroup.months).sort((a, b) => b.month - a.month);
+                });
+                
+                return sortedYears;
+            },
+            
+            // 获取月份名称
+            getMonthName(month) {
+                const names = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月'];
+                return names[month - 1];
+            },
+            
+            // 切换到相册视图
+            viewAlbum(albumId) {
+                this.currentAlbumId = albumId;
+                const album = this.getAlbumById(albumId);
+                
+                if (album) {
+                    // 显示相册标题区域
+                    document.getElementById('current-album-header').classList.remove('hidden');
+                    document.getElementById('current-album-title').textContent = album.name;
+                    document.getElementById('current-album-description').textContent = album.description || '无描述';
+                    document.getElementById('current-album-count').textContent = `${album.photoIds.length}张照片`;
+                    
+                    const createDate = new Date(album.createdAt);
+                    document.getElementById('current-album-date').textContent = 
+                        `${createDate.getFullYear()}-${(createDate.getMonth() + 1).toString().padStart(2, '0')}-${createDate.getDate().toString().padStart(2, '0')}`;
+                    
+                    // 隐藏"所有照片"标题
+                    document.querySelector('main .flex.items-center.space-x-2 h1').classList.add('hidden');
+                }
+                
+                this.updateCounts();
+                renderPhotos();
+            },
+            
+            // 返回所有照片视图
+            viewAllPhotos() {
+                this.currentAlbumId = null;
+                
+                // 隐藏相册标题区域
+                document.getElementById('current-album-header').classList.add('hidden');
+                
+                // 显示"所有照片"标题
+                document.querySelector('main .flex.items-center.space-x-2 h1').classList.remove('hidden');
+                
+                this.updateCounts();
+                renderPhotos();
+            }
+        };
+
+        // DOM 元素
+        const elements = {
+            sidebar: document.getElementById('sidebar'),
+            sidebarToggle: document.getElementById('sidebar-toggle'),
+            dropArea: document.getElementById('drop-area'),
+            uploadInputs: {
+                main: document.getElementById('upload-input'),
+                dropArea: document.getElementById('drop-area-upload'),
+                emptyState: document.getElementById('empty-state-upload')
+            },
+            photosContent: document.getElementById('photos-content'),
+            emptyState: document.getElementById('empty-state'),
+            albumsList: document.getElementById('albums-list'),
+            tagsList: document.getElementById('tags-list'),
+            uploadProgressModal: document.getElementById('upload-progress-modal'),
+            uploadOverallProgress: {
+                text: document.getElementById('upload-overall-text'),
+                percent: document.getElementById('upload-overall-percent'),
+                bar: document.getElementById('upload-overall-bar')
+            },
+            uploadFileProgress: {
+                container: document.getElementById('upload-file-progress'),
+                name: document.getElementById('upload-file-name'),
+                percent: document.getElementById('upload-file-percent'),
+                bar: document.getElementById('upload-file-bar')
+            },
+            uploadStatus: document.getElementById('upload-status'),
+            cancelUploadBtn: document.getElementById('cancel-upload-btn'),
+            pauseUploadBtn: document.getElementById('pause-upload-btn'),
+            resumeControls: document.getElementById('resume-controls'),
+            photoPreviewModal: document.getElementById('photo-preview-modal'),
+            previewImage: document.getElementById('preview-image'),
+            previewInfo: document.getElementById('preview-info'),
+            previewLoading: document.getElementById('preview-loading'),
+            closePreviewBtn: document.getElementById('close-preview-btn'),
+            prevPhotoBtn: document.getElementById('prev-photo-btn'),
+            nextPhotoBtn: document.getElementById('next-photo-btn'),
+            downloadPhotoBtn: document.getElementById('download-photo-btn'),
+            sharePhotoBtn: document.getElementById('share-photo-btn'),
+            deletePhotoBtn: document.getElementById('delete-photo-btn'),
+            createAlbumBtn: document.getElementById('create-album-btn'),
+            addAlbumBtn: document.getElementById('add-album-btn'),
+            albumModal: document.getElementById('album-modal'),
+            albumModalTitle: document.getElementById('album-modal-title'),
+            albumModalAction: document.getElementById('album-modal-action'),
+            albumForm: document.getElementById('album-form'),
+            albumIdInput: document.getElementById('album-id'),
+            albumNameInput: document.getElementById('album-name'),
+            albumNameError: document.getElementById('album-name-error'),
+            shareModal: document.getElementById('share-modal'),
+            shareLink: document.getElementById('share-link'),
+            copyShareLinkBtn: document.getElementById('copy-share-link'),
+            shareExpiry: document.getElementById('share-expiry'),
+            batchActionsBtn: document.getElementById('batch-actions-btn'),
+            batchModal: document.getElementById('batch-modal'),
+            batchCount: document.getElementById('batch-count'),
+            batchCancel: document.getElementById('batch-cancel'),
+            batchDelete: document.getElementById('batch-delete'),
+            batchAddAlbum: document.getElementById('batch-add-album'),
+            confirmDeleteModal: document.getElementById('confirm-delete-modal'),
+            confirmDeleteTitle: document.getElementById('confirm-delete-title'),
+            confirmDeleteMessage: document.getElementById('confirm-delete-message'),
+            cancelDeleteBtn: document.getElementById('cancel-delete-btn'),
+            confirmDeleteBtn: document.getElementById('confirm-delete-btn'),
+            addToAlbumModal: document.getElementById('add-to-album-modal'),
+            addToAlbumList: document.getElementById('add-to-album-list'),
+            createNewAlbumBtn: document.getElementById('create-new-album-btn'),
+            confirmAddToAlbum: document.getElementById('confirm-add-to-album'),
+            backToAllBtn: document.getElementById('back-to-all'),
+            editAlbumBtn: document.getElementById('edit-album-btn'),
+            deleteAlbumBtn: document.getElementById('delete-album-btn'),
+            notification: document.getElementById('notification'),
+            notificationTitle: document.getElementById('notification-title'),
+            notificationMessage: document.getElementById('notification-message'),
+            notificationIcon: document.getElementById('notification-icon'),
+            closeNotification: document.getElementById('close-notification')
+        };
+
+        // 上传管理
+        const uploadManager = {
+            uploadQueue: [],
+            isUploading: false,
+            isPaused: false,
+            currentUpload: null,
+            abortController: null,
+            uploadInterval: null,
+            _initialQueueLength: 0, // 用于跟踪初始队列长度
+            
+            // 添加文件到上传队列
+            addFiles(files) {
+                if (!files.length) return;
+                
+                // 过滤非图片文件
+                const imageFiles = Array.from(files).filter(file => file.type.startsWith('image/'));
+                
+                if (imageFiles.length === 0) {
+                    showNotification('错误', '请选择图片文件', 'error');
+                    return;
+                }
+                
+                // 添加到上传队列
+                this.uploadQueue.push(...imageFiles);
+                
+                // 如果没有正在上传，开始上传
+                if (!this.isUploading && !this.isPaused) {
+                    // 设置初始队列长度
+                    this._initialQueueLength = this.uploadQueue.length;
+                    this.startUpload();
+                } else if (this.isPaused) {
+                    showNotification('提示', '已添加到上传队列，点击继续上传', 'info');
+                }
+            },
+            
+            // 开始上传
+            async startUpload() {
+                if (this.uploadQueue.length === 0) {
+                    this.isUploading = false;
+                    this.isPaused = false;
+                    this._initialQueueLength = 0; // 重置初始队列长度
+                    elements.uploadProgressModal.classList.remove('flex');
+                    elements.uploadProgressModal.classList.add('hidden');
+                    elements.resumeControls.classList.add('hidden');
+                    return;
+                }
+                
+                this.isUploading = true;
+                this.isPaused = false;
+                this.currentUpload = this.uploadQueue[0]; // 不 shift，以便暂停后能继续
+                elements.uploadProgressModal.classList.remove('hidden');
+                elements.uploadProgressModal.classList.add('flex');
+                elements.resumeControls.classList.remove('hidden');
+                elements.pauseUploadBtn.innerHTML = '<i class="fa fa-pause mr-1"></i> 暂停上传';
+                
+                // 获取文件ID和保存的进度
+                const fileId = resumeManager.generateFileId(this.currentUpload);
+                const savedProgress = resumeManager.getProgress(fileId);
+                let startProgress = savedProgress.progress;
+                
+                // 更新总体进度
+                const totalFiles = this._initialQueueLength;
+                const completedFiles = totalFiles - this.uploadQueue.length;
+                const overallProgress = totalFiles > 0 ? Math.round(((completedFiles * 100) + startProgress) / totalFiles) : 0;
+                
+                elements.uploadOverallProgress.text.textContent = `正在上传 (${completedFiles + 1}/${totalFiles})`;
+                elements.uploadOverallProgress.percent.textContent = `${overallProgress}%`;
+                elements.uploadOverallProgress.bar.style.width = `${overallProgress}%`;
+                
+                // 显示当前文件进度
+                elements.uploadFileProgress.container.classList.remove('hidden');
+                elements.uploadFileProgress.name.textContent = this.currentUpload.name;
+                elements.uploadFileProgress.percent.textContent = `${Math.round(startProgress)}%`;
+                elements.uploadFileProgress.bar.style.width = `${startProgress}%`;
+                
+                try {
+                    // 如果进度已经是100%，直接处理完成
+                    if (startProgress >= 100) {
+                        await this.handleUploadComplete(this.currentUpload);
+                        this.uploadQueue.shift(); // 移除已完成的文件
+                        resumeManager.clearProgress(fileId); // 清除进度记录
+                        this.startUpload();
+                        return;
+                    }
+                    
+                    // 处理文件（转换HEIC等格式，但保留GIF）
+                    const processedFile = await this.processFile(this.currentUpload);
+                    
+                    // 模拟上传进度（从上次进度开始）
+                    await this.simulateUpload(processedFile, startProgress, fileId);
+                    
+                    // 上传完成后创建照片记录
+                    await this.handleUploadComplete(processedFile);
+                    
+                    // 移除已完成的文件
+                    this.uploadQueue.shift();
+                    resumeManager.clearProgress(fileId); // 清除进度记录
+                    
+                    // 继续下一个上传
+                    this.startUpload();
+                } catch (error) {
+                    if (error.message !== 'upload aborted' && error.message !== 'upload paused') {
+                        console.error('上传失败:', error);
+                        showNotification('上传失败', `${this.currentUpload.name} 上传失败`, 'error');
+                        this.uploadQueue.shift(); // 移除失败的文件
+                        resumeManager.clearProgress(fileId); // 清除进度记录
+                        this.startUpload(); // 继续下一个
+                    } else if (error.message === 'upload paused') {
+                        // 上传已暂停，保持状态
+                        elements.pauseUploadBtn.innerHTML = '<i class="fa fa-play mr-1"></i> 继续上传';
+                    }
+                }
+            },
+            
+            // 处理文件（转换HEIC等格式，但保留GIF）
+            async processFile(file) {
+                elements.uploadStatus.classList.remove('hidden');
+                elements.uploadStatus.textContent = `正在处理 ${file.name}...`;
+                
+                // 检查是否为GIF格式，如果是则直接返回，不进行转换
+                if (file.type === 'image/gif' || file.name.toLowerCase().endsWith('.gif')) {
+                    return file;
+                }
+                
+                // 检查是否为HEIC/HEIF格式
+                const fileName = file.name.toLowerCase();
+                const isHeic = file.type === 'image/heic' || file.type === 'image/heif' || 
+                              fileName.endsWith('.heic') || fileName.endsWith('.heif');
+                
+                if (isHeic) {
+                    elements.uploadStatus.textContent = `正在转换 HEIC 文件: ${file.name}...`;
+                    
+                    try {
+                        // 使用heic2any库转换HEIC为JPEG
+                        const result = await heic2any({
+                            blob: file,
+                            toType: 'image/jpeg',
+                            quality: 0.95
+                        });
+                        
+                        return new File([result], `${fileName.replace(/\.(heic|heif)$/i, '')}.jpg`, {
+                            type: 'image/jpeg',
+                            lastModified: file.lastModified
+                        });
+                    } catch (error) {
+                        console.error('HEIC转换失败:', error);
+                        showNotification('格式转换失败', `无法转换HEIC文件: ${file.name}`, 'error');
+                        throw new Error('HEIC conversion failed');
+                    }
+                }
+                
+                // 其他格式直接返回
+                return file;
+            },
+            
+            // 模拟上传进度（支持断点续传）
+            simulateUpload(file, startProgress, fileId) {
+                return new Promise((resolve, reject) => {
+                    this.abortController = new AbortController();
+                    let progress = startProgress;
+                    
+                    // 清除任何现有间隔
+                    if (this.uploadInterval) {
+                        clearInterval(this.uploadInterval);
+                    }
+                    
+                    // 根据文件大小调整上传速度，模拟大文件上传
+                    const fileSizeMB = file.size / (1024 * 1024);
+                    const speedFactor = Math.max(0.5, 5 / Math.max(1, fileSizeMB)); // 大文件上传速度较慢
+                    
+                    // 模拟进度
+                    this.uploadInterval = setInterval(() => {
+                        if (this.abortController.signal.aborted) {
+                            clearInterval(this.uploadInterval);
+                            reject(new Error('upload aborted'));
+                            return;
+                        }
+                        
+                        if (this.isPaused) {
+                            clearInterval(this.uploadInterval);
+                            reject(new Error('upload paused'));
+                            return;
+                        }
+                        
+                        // 增加进度，大文件增加较慢
+                        progress += Math.random() * speedFactor;
+                        
+                        // 保存进度
+                        resumeManager.saveProgress(fileId, progress);
+                        
+                        // 更新总体进度
+                        const totalFiles = this._initialQueueLength;
+                        const completedFiles = totalFiles - this.uploadQueue.length;
+                        const overallProgress = totalFiles > 0 ? Math.round(((completedFiles * 100) + progress) / totalFiles) : 0;
+                        
+                        elements.uploadOverallProgress.percent.textContent = `${overallProgress}%`;
+                        elements.uploadOverallProgress.bar.style.width = `${overallProgress}%`;
+                        
+                        // 更新当前文件进度
+                        elements.uploadFileProgress.percent.textContent = `${Math.round(progress)}%`;
+                        elements.uploadFileProgress.bar.style.width = `${progress}%`;
+                        
+                        if (progress >= 100) {
+                            progress = 100;
+                            clearInterval(this.uploadInterval);
+                            resolve();
+                        }
+                    }, 200);
+                });
+            },
+            
+            // 处理上传完成
+            async handleUploadComplete(file) {
+                elements.uploadStatus.textContent = `正在保存 ${file.name}...`;
+                
+                // 对于GIF文件，使用blob保存以保持动画效果
+                let photoUrl;
+                if (file.type === 'image/gif') {
+                    // 创建GIF的blob URL
+                    photoUrl = URL.createObjectURL(file);
+                } else {
+                    // 其他格式使用DataURL
+                    photoUrl = await this.getFileDataUrl(file);
+                }
+                
+                const now = new Date();
+                
+                const photo = {
+                    id: Date.now(),
+                    url: photoUrl,
+                    name: file.name,
+                    type: file.type,
+                    size: file.size,
+                    date: now.toISOString(),
+                    tags: [],
+                    albums: [],
+                    // 标记是否为GIF，便于后续处理
+                    isGif: file.type === 'image/gif'
+                };
+                
+                // 添加到照片管理器
+                photoManager.addPhotos([photo]);
+                
+                // 刷新照片显示
+                renderPhotos();
+                
+                elements.uploadStatus.textContent = `上传完成`;
+                showNotification('上传成功', `${file.name} 已上传`, 'success');
+            },
+            
+            // 获取文件的DataURL（非GIF格式使用）
+            getFileDataUrl(file) {
+                return new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+            },
+            
+            // 暂停上传
+            pauseUpload() {
+                if (this.isUploading && !this.isPaused) {
+                    this.isPaused = true;
+                    showNotification('已暂停', '上传已暂停', 'info');
+                } else if (this.isPaused) {
+                    this.isPaused = false;
+                    this.startUpload();
+                    showNotification('继续上传', '上传已继续', 'info');
+                }
+            },
+            
+            // 取消上传
+            cancelUpload() {
+                if (this.abortController) {
+                    this.abortController.abort();
+                }
+                
+                // 清除所有进度记录
+                this.uploadQueue.forEach(file => {
+                    const fileId = resumeManager.generateFileId(file);
+                    resumeManager.clearProgress(fileId);
+                });
+                
+                this.uploadQueue = [];
+                this.isUploading = false;
+                this.isPaused = false;
+                this._initialQueueLength = 0; // 重置初始队列长度
+                
+                if (this.uploadInterval) {
+                    clearInterval(this.uploadInterval);
+                }
+                
+                elements.uploadProgressModal.classList.remove('flex');
+                elements.uploadProgressModal.classList.add('hidden');
+                elements.resumeControls.classList.add('hidden');
+                
+                showNotification('上传已取消', '所有上传已终止', 'info');
+            }
+        };
+
+        // 渲染照片
+        function renderPhotos() {
+            const groups = photoManager.groupPhotosByTime();
+            
+            // 获取当前显示的照片总数
+            let totalPhotos = 0;
+            groups.forEach(yearGroup => {
+                Object.values(yearGroup.months).forEach(monthGroup => {
+                    totalPhotos += monthGroup.photos.length;
+                });
+            });
+            
+            // 如果没有照片，显示空状态
+            if (totalPhotos === 0) {
+                elements.emptyState.classList.remove('hidden');
+                elements.photosContent.classList.add('hidden');
+                return;
+            }
+            
+            // 隐藏空状态，显示照片
+            elements.emptyState.classList.add('hidden');
+            elements.photosContent.classList.remove('hidden');
+            elements.photosContent.innerHTML = '';
+            
+            // 渲染每个年份组
+            groups.forEach(yearGroup => {
+                const yearElement = document.createElement('div');
+                yearElement.className = 'mb-8';
+                
+                // 年份标题
+                const yearTitle = document.createElement('h2');
+                yearTitle.className = 'text-xl font-bold mb-4 text-gray-800';
+                yearTitle.textContent = yearGroup.year;
+                yearElement.appendChild(yearTitle);
+                
+                // 月份组容器
+                const monthsContainer = document.createElement('div');
+                monthsContainer.className = 'space-y-6';
+                
+                // 渲染每个月份组
+                yearGroup.months.forEach(monthGroup => {
+                    const monthElement = document.createElement('div');
+                    
+                    // 月份标题
+                    const monthTitle = document.createElement('h3');
+                    monthTitle.className = 'text-base font-semibold mb-3 text-gray-700';
+                    monthTitle.textContent = monthGroup.monthName;
+                    monthElement.appendChild(monthTitle);
+                    
+                    // 照片网格
+                    const photosGrid = document.createElement('div');
+                    photosGrid.className = 'photo-grid';
+                    
+                    // 渲染照片
+                    monthGroup.photos.forEach(photo => {
+                        const photoCard = createPhotoCard(photo);
+                        photosGrid.appendChild(photoCard);
+                    });
+                    
+                    monthElement.appendChild(photosGrid);
+                    monthsContainer.appendChild(monthElement);
+                });
+                
+                yearElement.appendChild(monthsContainer);
+                elements.photosContent.appendChild(yearElement);
+            });
+        }
+
+        // 创建照片卡片
+        function createPhotoCard(photo) {
+            const card = document.createElement('div');
+            card.className = 'group relative bg-white rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-all cursor-pointer fade-in';
+            card.dataset.photoId = photo.id;
+            
+            // 计算照片尺寸和容器比例
+            const aspectRatio = 4/3; // 默认比例
+            
+            // 照片选择框
+            const selectCheckbox = document.createElement('div');
+            selectCheckbox.className = 'absolute top-2 left-2 w-5 h-5 rounded border-2 border-white bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity z-10 flex items-center justify-center';
+            selectCheckbox.innerHTML = '<i class="fa fa-check text-white text-xs hidden"></i>';
+            selectCheckbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                togglePhotoSelection(photo.id, selectCheckbox);
+            });
+            
+            // 照片容器
+            const photoContainer = document.createElement('div');
+            photoContainer.className = 'relative w-full overflow-hidden';
+            photoContainer.style.paddingBottom = `${100 / aspectRatio}%`; // 使用padding保持比例
+            
+            // 照片图片 - 对于GIF使用img标签保持动画
+            const img = document.createElement('img');
+            img.src = photo.url;
+            img.alt = photo.name;
+            img.className = 'absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105';
+            
+            // 如果是GIF，添加标识
+            if (photo.isGif) {
+                const gifBadge = document.createElement('div');
+                gifBadge.className = 'absolute bottom-2 right-2 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded backdrop-blur-sm';
+                gifBadge.textContent = 'GIF';
+                photoContainer.appendChild(gifBadge);
+            }
+            
+            // 照片信息
+            const infoContainer = document.createElement('div');
+            infoContainer.className = 'p-2';
+            
+            const photoName = document.createElement('div');
+            photoName.className = 'text-xs font-medium truncate';
+            photoName.textContent = photo.name;
+            
+            const photoDate = document.createElement('div');
+            photoDate.className = 'text-xs text-gray-500';
+            photoDate.textContent = formatDate(photo.date);
+            
+            infoContainer.appendChild(photoName);
+            infoContainer.appendChild(photoDate);
+            
+            photoContainer.appendChild(img);
+            card.appendChild(selectCheckbox);
+            card.appendChild(photoContainer);
+            card.appendChild(infoContainer);
+            
+            // 点击查看大图
+            card.addEventListener('click', () => openPhotoPreview(photo));
+            
+            return card;
+        }
+
+        // 渲染相册列表
+        function renderAlbums() {
+            elements.albumsList.innerHTML = '';
+            
+            if (photoManager.albums.length === 0) {
+                const emptyAlbums = document.createElement('div');
+                emptyAlbums.className = 'px-4 py-3 text-sm text-gray-500 italic';
+                emptyAlbums.textContent = '暂无相册，点击创建相册';
+                elements.albumsList.appendChild(emptyAlbums);
+                return;
+            }
+            
+            photoManager.albums.forEach(album => {
+                const albumItem = document.createElement('a');
+                albumItem.className = `flex items-center justify-between px-4 py-3 text-sm font-medium transition-colors ${photoManager.currentAlbumId === album.id ? 'sidebar-active' : 'text-gray-600 hover:bg-gray-100'}`;
+                
+                const albumInfo = document.createElement('div');
+                albumInfo.className = 'flex items-center';
+                albumInfo.innerHTML = `
+                    <i class="fa fa-folder w-5 text-center mr-3 ${photoManager.currentAlbumId === album.id ? 'text-primary' : 'text-gray-400'}"></i>
+                    <span>${album.name}</span>
+                `;
+                
+                const albumCount = document.createElement('span');
+                albumCount.className = 'text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full';
+                albumCount.textContent = album.photoIds.length;
+                
+                // 点击相册查看
+                albumItem.addEventListener('click', () => {
+                    photoManager.viewAlbum(album.id);
+                    renderAlbums(); // 更新选中状态
+                });
+                
+                albumItem.appendChild(albumInfo);
+                albumItem.appendChild(albumCount);
+                elements.albumsList.appendChild(albumItem);
+            });
+        }
+
+        // 渲染标签列表
+        function renderTags() {
+            elements.tagsList.innerHTML = '';
+            
+            if (photoManager.tags.length === 0) {
+                const emptyTags = document.createElement('div');
+                emptyTags.className = 'px-4 py-3 text-sm text-gray-500 italic';
+                emptyTags.textContent = '暂无标签';
+                elements.tagsList.appendChild(emptyTags);
+                return;
+            }
+            
+            photoManager.tags.forEach(tag => {
+                const tagItem = document.createElement('a');
+                tagItem.className = 'flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 transition-colors';
+                
+                const tagInfo = document.createElement('div');
+                tagInfo.className = 'flex items-center';
+                tagInfo.innerHTML = `
+                    <i class="fa fa-tag w-5 text-center mr-3 text-gray-400"></i>
+                    <span>${tag.name}</span>
+                `;
+                
+                const tagCount = document.createElement('span');
+                tagCount.className = 'text-xs text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full';
+                tagCount.textContent = tag.photoIds.length;
+                
+                tagItem.appendChild(tagInfo);
+                tagItem.appendChild(tagCount);
+                elements.tagsList.appendChild(tagItem);
+            });
+        }
+
+        // 渲染添加到相册列表
+        function renderAddToAlbumList(selectedAlbumIds = []) {
+            elements.addToAlbumList.innerHTML = '';
+            
+            if (photoManager.albums.length === 0) {
+                const emptyAlbums = document.createElement('div');
+                emptyAlbums.className = 'px-4 py-3 text-sm text-gray-500 italic text-center';
+                emptyAlbums.textContent = '暂无相册，请先创建相册';
+                elements.addToAlbumList.appendChild(emptyAlbums);
+                elements.confirmAddToAlbum.disabled = true;
+                elements.confirmAddToAlbum.classList.add('opacity-50', 'cursor-not-allowed');
+                return;
+            }
+            
+            elements.confirmAddToAlbum.disabled = false;
+            elements.confirmAddToAlbum.classList.remove('opacity-50', 'cursor-not-allowed');
+            
+            photoManager.albums.forEach(album => {
+                const isSelected = selectedAlbumIds.includes(album.id);
+                
+                const albumItem = document.createElement('div');
+                albumItem.className = `flex items-center justify-between px-3 py-2 rounded-md transition-colors ${isSelected ? 'bg-primary/10' : 'hover:bg-gray-100'}`;
+                
+                const albumInfo = document.createElement('div');
+                albumInfo.className = 'flex items-center';
+                albumInfo.innerHTML = `
+                    <i class="fa fa-folder w-5 text-center mr-3 ${isSelected ? 'text-primary' : 'text-gray-400'}"></i>
+                    <span>${album.name}</span>
+                `;
+                
+                const albumCheckbox = document.createElement('div');
+                albumCheckbox.className = `w-4 h-4 rounded border-2 ${isSelected ? 'border-primary bg-primary' : 'border-gray-300'} flex items-center justify-center`;
+                albumCheckbox.innerHTML = isSelected ? '<i class="fa fa-check text-white text-xs"></i>' : '';
+                
+                // 点击选择/取消选择
+                albumItem.addEventListener('click', () => {
+                    const newSelected = isSelected 
+                        ? selectedAlbumIds.filter(id => id !== album.id)
+                        : [...selectedAlbumIds, album.id];
+                    
+                    renderAddToAlbumList(newSelected);
+                    
+                    // 保存选中的相册ID
+                    elements.addToAlbumList.dataset.selectedAlbums = JSON.stringify(newSelected);
+                });
+                
+                albumItem.appendChild(albumInfo);
+                albumItem.appendChild(albumCheckbox);
+                elements.addToAlbumList.appendChild(albumItem);
+            });
+        }
+
+        // 打开照片预览
+        function openPhotoPreview(photo) {
+            // 找到当前照片在列表中的索引
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            photoManager.currentPreviewIndex = visiblePhotos.findIndex(p => p.id === photo.id);
+            
+            // 更新预览内容
+            updatePreviewContent(photo);
+            
+            // 显示预览模态框
+            elements.photoPreviewModal.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+        }
+
+        // 更新预览内容
+        function updatePreviewContent(photo) {
+            // 显示加载状态
+            elements.previewLoading.classList.remove('hidden');
+            elements.previewImage.style.opacity = '0.5';
+            
+            // 设置图片源 - 对于GIF直接使用原始URL保持动画
+            elements.previewImage.src = photo.url;
+            elements.previewImage.alt = photo.name;
+            
+            // 图片加载完成后隐藏加载状态
+            elements.previewImage.onload = () => {
+                elements.previewLoading.classList.add('hidden');
+                elements.previewImage.style.opacity = '1';
+            };
+            
+            // 更新信息
+            const date = new Date(photo.date);
+            elements.previewInfo.textContent = `${photo.name} · ${formatDate(photo.date, true)} · ${formatFileSize(photo.size)} ${photo.isGif ? '· GIF' : ''}`;
+        }
+
+        // 切换到上一张照片
+        function prevPhoto() {
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            if (visiblePhotos.length <= 1) return;
+            
+            photoManager.currentPreviewIndex = 
+                (photoManager.currentPreviewIndex - 1 + visiblePhotos.length) % visiblePhotos.length;
+            
+            const prevPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+            updatePreviewContent(prevPhoto);
+        }
+
+        // 切换到下一张照片
+        function nextPhoto() {
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            if (visiblePhotos.length <= 1) return;
+            
+            photoManager.currentPreviewIndex = 
+                (photoManager.currentPreviewIndex + 1) % visiblePhotos.length;
+            
+            const nextPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+            updatePreviewContent(nextPhoto);
+        }
+
+        // 下载照片
+        function downloadPhoto() {
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            const currentPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+            
+            if (currentPhoto) {
+                // 对于GIF文件，使用Fetch API获取原始blob以保持动画
+                if (currentPhoto.isGif) {
+                    fetch(currentPhoto.url)
+                        .then(response => response.blob())
+                        .then(blob => {
+                            const url = URL.createObjectURL(blob);
+                            const link = document.createElement('a');
+                            link.href = url;
+                            link.download = currentPhoto.name;
+                            document.body.appendChild(link);
+                            link.click();
+                            document.body.removeChild(link);
+                            URL.revokeObjectURL(url);
+                        })
+                        .catch(error => {
+                            console.error('GIF下载失败:', error);
+                            showNotification('下载失败', '无法下载GIF图片', 'error');
+                        });
+                } else {
+                    // 其他格式直接下载
+                    const link = document.createElement('a');
+                    link.href = currentPhoto.url;
+                    link.download = currentPhoto.name;
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                }
+                
+                showNotification('下载已开始', `${currentPhoto.name} 正在下载`, 'success');
+            }
+        }
+
+        // 删除照片
+        function deletePhoto() {
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            const currentPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+            
+            if (currentPhoto) {
+                // 关闭预览
+                closePhotoPreview();
+                
+                // 显示确认删除对话框
+                elements.confirmDeleteTitle.textContent = '删除照片';
+                elements.confirmDeleteMessage.textContent = `您确定要删除 "${currentPhoto.name}" 吗？此操作无法撤销。`;
+                elements.confirmDeleteModal.classList.remove('hidden');
+                elements.confirmDeleteModal.classList.add('flex');
+                
+                // 设置确认删除回调
+                const confirmHandler = () => {
+                    // 删除照片
+                    photoManager.deletePhotos([currentPhoto.id]);
+                    
+                    // 重新渲染
+                    renderPhotos();
+                    renderAlbums(); // 如果在相册视图，更新计数
+                    
+                    elements.confirmDeleteModal.classList.remove('flex');
+                    elements.confirmDeleteModal.classList.add('hidden');
+                    
+                    // 移除事件监听器
+                    elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                    elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                    
+                    showNotification('已删除', `${currentPhoto.name} 已被删除`, 'info');
+                };
+                
+                const cancelHandler = () => {
+                    elements.confirmDeleteModal.classList.remove('flex');
+                    elements.confirmDeleteModal.classList.add('hidden');
+                    
+                    // 移除事件监听器
+                    elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                    elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                };
+                
+                elements.confirmDeleteBtn.addEventListener('click', confirmHandler);
+                elements.cancelDeleteBtn.addEventListener('click', cancelHandler);
+            }
+        }
+
+        // 关闭照片预览
+        function closePhotoPreview() {
+            elements.photoPreviewModal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        // 生成分享链接
+        function generateShareLink() {
+            const visiblePhotos = photoManager.currentAlbumId 
+                ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                : photoManager.photos;
+                
+            const currentPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+            
+            if (currentPhoto) {
+                const expiry = elements.shareExpiry.value;
+                const shareLink = photoManager.generateShareLink(currentPhoto.id, expiry);
+                
+                elements.shareLink.value = shareLink;
+                elements.shareModal.classList.remove('hidden');
+                elements.shareModal.classList.add('flex');
+            }
+        }
+
+        // 复制分享链接
+        function copyShareLink() {
+            elements.shareLink.select();
+            document.execCommand('copy');
+            
+            const originalText = elements.copyShareLinkBtn.innerHTML;
+            elements.copyShareLinkBtn.innerHTML = '<i class="fa fa-check"></i>';
+            
+            setTimeout(() => {
+                elements.copyShareLinkBtn.innerHTML = originalText;
+                showNotification('已复制', '分享链接已复制到剪贴板', 'success');
+            }, 1000);
+        }
+
+        // 切换照片选择状态
+        function togglePhotoSelection(photoId, checkboxElement) {
+            const index = photoManager.selectedPhotos.indexOf(photoId);
+            
+            if (index === -1) {
+                // 选中照片
+                photoManager.selectedPhotos.push(photoId);
+                checkboxElement.querySelector('i').classList.remove('hidden');
+                checkboxElement.classList.add('bg-primary');
+                checkboxElement.classList.remove('bg-black/40');
+            } else {
+                // 取消选中
+                photoManager.selectedPhotos.splice(index, 1);
+                checkboxElement.querySelector('i').classList.add('hidden');
+                checkboxElement.classList.remove('bg-primary');
+                checkboxElement.classList.add('bg-black/40');
+            }
+            
+            // 更新批量操作按钮状态
+            updateBatchActionsState();
+        }
+
+        // 更新批量操作按钮状态
+        function updateBatchActionsState() {
+            if (photoManager.selectedPhotos.length > 0) {
+                elements.batchActionsBtn.disabled = false;
+                elements.batchActionsBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                elements.batchCount.textContent = photoManager.selectedPhotos.length;
+            } else {
+                elements.batchActionsBtn.disabled = true;
+                elements.batchActionsBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            }
+        }
+
+        // 打开批量操作模态框
+        function openBatchModal() {
+            if (photoManager.selectedPhotos.length > 0) {
+                elements.batchModal.classList.remove('hidden');
+                elements.batchModal.classList.add('flex');
+            }
+        }
+
+        // 取消批量选择
+        function cancelBatchSelection() {
+            photoManager.selectedPhotos = [];
+            
+            // 更新所有选择框
+            document.querySelectorAll('[data-photo-id] .fa-check').forEach(icon => {
+                icon.classList.add('hidden');
+                const checkbox = icon.closest('div');
+                checkbox.classList.remove('bg-primary');
+                checkbox.classList.add('bg-black/40');
+            });
+            
+            // 更新状态
+            updateBatchActionsState();
+            elements.batchModal.classList.remove('flex');
+            elements.batchModal.classList.add('hidden');
+        }
+
+        // 批量删除照片
+        function batchDeletePhotos() {
+            if (photoManager.selectedPhotos.length > 0) {
+                // 关闭批量操作模态框
+                elements.batchModal.classList.remove('flex');
+                elements.batchModal.classList.add('hidden');
+                
+                // 显示确认删除对话框
+                elements.confirmDeleteTitle.textContent = '批量删除';
+                elements.confirmDeleteMessage.textContent = `您确定要删除选中的 ${photoManager.selectedPhotos.length} 张照片吗？此操作无法撤销。`;
+                elements.confirmDeleteModal.classList.remove('hidden');
+                elements.confirmDeleteModal.classList.add('flex');
+                
+                // 设置确认删除回调
+                const confirmHandler = () => {
+                    // 删除照片
+                    const photoIds = [...photoManager.selectedPhotos];
+                    photoManager.deletePhotos(photoIds);
+                    
+                    // 重新渲染
+                    renderPhotos();
+                    renderAlbums(); // 如果在相册视图，更新计数
+                    
+                    // 重置选择
+                    photoManager.selectedPhotos = [];
+                    updateBatchActionsState();
+                    
+                    elements.confirmDeleteModal.classList.remove('flex');
+                    elements.confirmDeleteModal.classList.add('hidden');
+                    
+                    // 移除事件监听器
+                    elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                    elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                    
+                    showNotification('已删除', `已删除 ${photoIds.length} 张照片`, 'info');
+                };
+                
+                const cancelHandler = () => {
+                    elements.confirmDeleteModal.classList.remove('flex');
+                    elements.confirmDeleteModal.classList.add('hidden');
+                    
+                    // 移除事件监听器
+                    elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                    elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                };
+                
+                elements.confirmDeleteBtn.addEventListener('click', confirmHandler);
+                elements.cancelDeleteBtn.addEventListener('click', cancelHandler);
+            }
+        }
+
+        // 打开添加到相册模态框
+        function openAddToAlbumModal() {
+            if (photoManager.selectedPhotos.length > 0) {
+                // 关闭批量操作模态框
+                elements.batchModal.classList.remove('flex');
+                elements.batchModal.classList.add('hidden');
+                
+                // 渲染相册列表
+                renderAddToAlbumList();
+                
+                // 显示模态框
+                elements.addToAlbumModal.classList.remove('hidden');
+                elements.addToAlbumModal.classList.add('flex');
+            }
+        }
+
+        // 确认添加到相册
+        function confirmAddToAlbum() {
+            const selectedAlbums = JSON.parse(elements.addToAlbumList.dataset.selectedAlbums || '[]');
+            
+            if (selectedAlbums.length > 0 && photoManager.selectedPhotos.length > 0) {
+                // 添加照片到选中的相册
+                photoManager.selectedPhotos.forEach(photoId => {
+                    selectedAlbums.forEach(albumId => {
+                        photoManager.addPhotoToAlbum(photoId, albumId);
+                    });
+                });
+                
+                // 关闭模态框
+                elements.addToAlbumModal.classList.remove('flex');
+                elements.addToAlbumModal.classList.add('hidden');
+                
+                // 重置选择
+                photoManager.selectedPhotos = [];
+                updateBatchActionsState();
+                
+                // 更新相册列表
+                renderAlbums();
+                
+                showNotification('添加成功', 
+                    `已将 ${photoManager.selectedPhotos.length} 张照片添加到 ${selectedAlbums.length} 个相册`, 
+                    'success');
+            }
+        }
+
+        // 打开创建/编辑相册模态框
+        function openAlbumModal(albumId = null) {
+            // 重置表单
+            elements.albumForm.reset();
+            elements.albumIdInput.value = '';
+            elements.albumNameError.classList.add('hidden');
+            
+            if (albumId) {
+                // 编辑模式
+                const album = photoManager.getAlbumById(albumId);
+                if (album) {
+                    elements.albumModalTitle.textContent = '编辑相册';
+                    elements.albumModalAction.textContent = '保存更改';
+                    elements.albumIdInput.value = album.id;
+                    elements.albumNameInput.value = album.name;
+                    document.getElementById('album-description').value = album.description || '';
+                }
+            } else {
+                // 创建模式
+                elements.albumModalTitle.textContent = '创建新相册';
+                elements.albumModalAction.textContent = '创建相册';
+            }
+            
+            // 显示模态框
+            elements.albumModal.classList.remove('hidden');
+            elements.albumModal.classList.add('flex');
+        }
+
+        // 提交相册表单（创建或编辑）
+        function submitAlbumForm(e) {
+            e.preventDefault();
+            
+            // 验证相册名称
+            if (!validateAlbumName()) {
+                return;
+            }
+            
+            const albumId = elements.albumIdInput.value;
+            const name = elements.albumNameInput.value.trim();
+            const description = document.getElementById('album-description').value.trim();
+            
+            let success = false;
+            let message = '';
+            
+            if (albumId) {
+                // 编辑相册
+                success = photoManager.updateAlbum(parseInt(albumId), name, description);
+                message = success ? `相册 "${name}" 已更新` : '更新相册失败';
+            } else {
+                // 创建相册
+                const album = photoManager.createAlbum(name, description);
+                success = !!album;
+                message = success ? `相册 "${name}" 已创建` : '创建相册失败';
+            }
+            
+            if (success) {
+                // 关闭模态框
+                elements.albumModal.classList.remove('flex');
+                elements.albumModal.classList.add('hidden');
+                
+                // 重新渲染相册列表
+                renderAlbums();
+                
+                showNotification(success ? '成功' : '失败', message, success ? 'success' : 'error');
+            }
+        }
+
+        // 删除相册
+        function deleteCurrentAlbum() {
+            if (photoManager.currentAlbumId) {
+                const album = photoManager.getAlbumById(photoManager.currentAlbumId);
+                if (album) {
+                    // 显示确认删除对话框
+                    elements.confirmDeleteTitle.textContent = '删除相册';
+                    elements.confirmDeleteMessage.textContent = 
+                        `您确定要删除相册 "${album.name}" 吗？相册中的照片不会被删除，只会从该相册中移除。`;
+                    elements.confirmDeleteModal.classList.remove('hidden');
+                    elements.confirmDeleteModal.classList.add('flex');
+                    
+                    // 设置确认删除回调
+                    const confirmHandler = () => {
+                        // 删除相册
+                        const success = photoManager.deleteAlbum(photoManager.currentAlbumId);
+                        
+                        if (success) {
+                            // 返回所有照片视图
+                            photoManager.viewAllPhotos();
+                            
+                            // 重新渲染相册列表
+                            renderAlbums();
+                        }
+                        
+                        elements.confirmDeleteModal.classList.remove('flex');
+                        elements.confirmDeleteModal.classList.add('hidden');
+                        
+                        // 移除事件监听器
+                        elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                        elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                        
+                        showNotification(
+                            success ? '已删除' : '删除失败', 
+                            success ? `相册 "${album.name}" 已被删除` : '删除相册失败',
+                            success ? 'info' : 'error'
+                        );
+                    };
+                    
+                    const cancelHandler = () => {
+                        elements.confirmDeleteModal.classList.remove('flex');
+                        elements.confirmDeleteModal.classList.add('hidden');
+                        
+                        // 移除事件监听器
+                        elements.confirmDeleteBtn.removeEventListener('click', confirmHandler);
+                        elements.cancelDeleteBtn.removeEventListener('click', cancelHandler);
+                    };
+                    
+                    elements.confirmDeleteBtn.addEventListener('click', confirmHandler);
+                    elements.cancelDeleteBtn.addEventListener('click', cancelHandler);
+                }
+            }
+        }
+
+        // 显示通知
+        function showNotification(title, message, type = 'info') {
+            // 设置图标和颜色
+            let icon, colorClass;
+            switch(type) {
+                case 'success':
+                    icon = '<i class="fa fa-check-circle text-green-500 text-xl"></i>';
+                    colorClass = 'border-l-4 border-green-500';
+                    break;
+                case 'error':
+                    icon = '<i class="fa fa-exclamation-circle text-red-500 text-xl"></i>';
+                    colorClass = 'border-l-4 border-red-500';
+                    break;
+                case 'warning':
+                    icon = '<i class="fa fa-exclamation-triangle text-yellow-500 text-xl"></i>';
+                    colorClass = 'border-l-4 border-yellow-500';
+                    break;
+                default:
+                    icon = '<i class="fa fa-info-circle text-primary text-xl"></i>';
+                    colorClass = 'border-l-4 border-primary';
+            }
+            
+            // 更新通知内容
+            elements.notificationIcon.innerHTML = icon;
+            elements.notificationTitle.textContent = title;
+            elements.notificationMessage.textContent = message;
+            elements.notification.className = `fixed bottom-4 right-4 max-w-sm bg-white rounded-lg shadow-lg p-4 transform translate-y-0 opacity-100 transition-all duration-300 z-50 ${colorClass}`;
+            
+            // 3秒后自动关闭
+            setTimeout(hideNotification, 3000);
+        }
+
+        // 隐藏通知
+        function hideNotification() {
+            elements.notification.className = 'fixed bottom-4 right-4 max-w-sm bg-white rounded-lg shadow-lg p-4 transform translate-y-20 opacity-0 transition-all duration-300 z-50 hidden';
+        }
+
+        // 格式化日期
+        function formatDate(dateString, full = false) {
+            const date = new Date(dateString);
+            
+            if (full) {
+                return `${date.getFullYear()}-${(date.getMonth() + 1).toString().padStart(2, '0')}-${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            }
+            
+            return `${date.getMonth() + 1}月${date.getDate()}日`;
+        }
+
+        // 格式化文件大小
+        function formatFileSize(bytes) {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        // 验证相册名称
+        function validateAlbumName() {
+            const name = elements.albumNameInput.value.trim();
+            if (!name) {
+                elements.albumNameError.classList.remove('hidden');
+                return false;
+            }
+            elements.albumNameError.classList.add('hidden');
+            return true;
+        }
+
+        // 初始化事件监听
+        function initEventListeners() {
+            // 侧边栏切换
+            elements.sidebarToggle.addEventListener('click', () => {
+                elements.sidebar.classList.toggle('hidden');
+                elements.sidebar.classList.toggle('fixed');
+                elements.sidebar.classList.toggle('inset-y-0');
+                elements.sidebar.classList.toggle('left-0');
+                elements.sidebar.classList.toggle('z-50');
+            });
+            
+            // 上传文件
+            Object.values(elements.uploadInputs).forEach(input => {
+                input.addEventListener('change', (e) => {
+                    uploadManager.addFiles(e.target.files);
+                    // 清除input值，允许重复选择同一文件
+                    e.target.value = '';
+                });
+            });
+            
+            // 拖放上传
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                elements.dropArea.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                elements.dropArea.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                elements.dropArea.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                elements.dropArea.classList.add('border-primary');
+                elements.dropArea.classList.add('bg-primary/5');
+            }
+            
+            function unhighlight() {
+                elements.dropArea.classList.remove('border-primary');
+                elements.dropArea.classList.remove('bg-primary/5');
+            }
+            
+            elements.dropArea.addEventListener('drop', handleDrop, false);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                uploadManager.addFiles(files);
+            }
+            
+            // 上传控制
+            elements.cancelUploadBtn.addEventListener('click', () => {
+                uploadManager.cancelUpload();
+            });
+            
+            elements.pauseUploadBtn.addEventListener('click', () => {
+                uploadManager.pauseUpload();
+            });
+            
+            // 照片预览相关
+            elements.closePreviewBtn.addEventListener('click', closePhotoPreview);
+            elements.prevPhotoBtn.addEventListener('click', prevPhoto);
+            elements.nextPhotoBtn.addEventListener('click', nextPhoto);
+            elements.downloadPhotoBtn.addEventListener('click', downloadPhoto);
+            elements.sharePhotoBtn.addEventListener('click', generateShareLink);
+            elements.deletePhotoBtn.addEventListener('click', deletePhoto);
+            
+            // 键盘导航
+            document.addEventListener('keydown', (e) => {
+                if (!elements.photoPreviewModal.classList.contains('hidden')) {
+                    switch(e.key) {
+                        case 'ArrowLeft':
+                            prevPhoto();
+                            e.preventDefault();
+                            break;
+                        case 'ArrowRight':
+                            nextPhoto();
+                            e.preventDefault();
+                            break;
+                        case 'Escape':
+                            closePhotoPreview();
+                            e.preventDefault();
+                            break;
+                    }
+                }
+            });
+            
+            // 创建/编辑相册按钮点击事件
+            elements.createAlbumBtn.addEventListener('click', () => {
+                openAlbumModal();
+            });
+            
+            elements.addAlbumBtn.addEventListener('click', () => {
+                openAlbumModal();
+            });
+            
+            // 相册名称输入验证
+            elements.albumNameInput.addEventListener('input', validateAlbumName);
+            
+            // 相册表单提交
+            elements.albumForm.addEventListener('submit', submitAlbumForm);
+            
+            // 返回所有照片
+            elements.backToAllBtn.addEventListener('click', () => {
+                photoManager.viewAllPhotos();
+                renderAlbums(); // 更新选中状态
+            });
+            
+            // 编辑当前相册
+            elements.editAlbumBtn.addEventListener('click', () => {
+                if (photoManager.currentAlbumId) {
+                    openAlbumModal(photoManager.currentAlbumId);
+                }
+            });
+            
+            // 删除当前相册
+            elements.deleteAlbumBtn.addEventListener('click', deleteCurrentAlbum);
+            
+            // 关闭模态框按钮
+            document.querySelectorAll('.close-modal').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const modal = this.closest('[id$="-modal"]');
+                    modal.classList.remove('flex');
+                    modal.classList.add('hidden');
+                    // 重置表单错误状态
+                    if (modal.id === 'album-modal') {
+                        elements.albumForm.reset();
+                        elements.albumNameError.classList.add('hidden');
+                    }
+                });
+            });
+            
+            // 点击模态框背景关闭
+            document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === this) {
+                        this.classList.remove('flex');
+                        this.classList.add('hidden');
+                        // 重置表单错误状态
+                        if (this.id === 'album-modal') {
+                            elements.albumForm.reset();
+                            elements.albumNameError.classList.add('hidden');
+                        }
+                    }
+                });
+            });
+            
+            // 分享链接相关
+            elements.copyShareLinkBtn.addEventListener('click', copyShareLink);
+            elements.shareExpiry.addEventListener('change', () => {
+                const visiblePhotos = photoManager.currentAlbumId 
+                    ? photoManager.getAlbumPhotos(photoManager.currentAlbumId)
+                    : photoManager.photos;
+                    
+                const currentPhoto = visiblePhotos[photoManager.currentPreviewIndex];
+                
+                if (currentPhoto) {
+                    const expiry = elements.shareExpiry.value;
+                    elements.shareLink.value = photoManager.generateShareLink(currentPhoto.id, expiry);
+                }
+            });
+            
+            // 批量操作
+            elements.batchActionsBtn.addEventListener('click', openBatchModal);
+            elements.batchCancel.addEventListener('click', cancelBatchSelection);
+            elements.batchDelete.addEventListener('click', batchDeletePhotos);
+            elements.batchAddAlbum.addEventListener('click', openAddToAlbumModal);
+            
+            // 添加到相册
+            elements.createNewAlbumBtn.addEventListener('click', () => {
+                // 关闭添加到相册模态框
+                elements.addToAlbumModal.classList.remove('flex');
+                elements.addToAlbumModal.classList.add('hidden');
+                
+                // 打开创建相册模态框，并设置回调
+                const originalSubmitHandler = elements.albumForm.onsubmit;
+                elements.albumForm.onsubmit = function(e) {
+                    e.preventDefault();
+                    
+                    if (!validateAlbumName()) {
+                        return;
+                    }
+                    
+                    const name = elements.albumNameInput.value.trim();
+                    const description = document.getElementById('album-description').value.trim();
+                    
+                    const album = photoManager.createAlbum(name, description);
+                    
+                    if (album) {
+                        // 关闭相册模态框
+                        elements.albumModal.classList.remove('flex');
+                        elements.albumModal.classList.add('hidden');
+                        
+                        // 重新渲染相册列表并选中新创建的相册
+                        renderAddToAlbumList([album.id]);
+                        elements.addToAlbumList.dataset.selectedAlbums = JSON.stringify([album.id]);
+                        
+                        // 重新显示添加到相册模态框
+                        elements.addToAlbumModal.classList.remove('hidden');
+                        elements.addToAlbumModal.classList.add('flex');
+                        
+                        // 恢复原始提交处理
+                        elements.albumForm.onsubmit = originalSubmitHandler;
+                        
+                        showNotification('成功', `相册 "${name}" 已创建`, 'success');
+                    }
+                };
+                
+                openAlbumModal();
+            });
+            
+            elements.confirmAddToAlbum.addEventListener('click', confirmAddToAlbum);
+            
+            // 关闭通知
+            elements.closeNotification.addEventListener('click', hideNotification);
+        }
+
+        // 初始化应用
+        function init() {
+            renderPhotos();
+            renderAlbums();
+            renderTags();
+            photoManager.updateCounts();
+            initEventListeners();
+            
+            // 确保所有模态框初始状态正确
+            document.querySelectorAll('[id$="-modal"]').forEach(modal => {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            });
+        }
+
+        // 启动应用
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
+    
